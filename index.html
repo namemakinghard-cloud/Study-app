@@ -495,6 +495,56 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background
 .login-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .btn.big { height: 52px; font-size: 1.05rem; }
 
+/* ── 타임라인 ───────────────────────────── */
+.view-seg { margin-bottom: 12px; }
+.view-seg .ic { width: 1em; height: 1em; }
+.tl { margin-top: 2px; }
+.tl-scroll { max-height: min(68vh, 760px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 14px; background: var(--card); -webkit-overflow-scrolling: touch; }
+.tl-grid { position: relative; margin: 6px 0; }
+.tl-hour { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--line); }
+.tl-hour span { position: absolute; left: 8px; top: -9px; font-size: .74rem; font-weight: 600; color: var(--muted); background: var(--card); padding: 0 4px; font-variant-numeric: tabular-nums; }
+.tl-half { position: absolute; left: 56px; right: 0; border-top: 1px dashed color-mix(in srgb, var(--line) 70%, transparent); }
+.tl-area { position: absolute; top: 0; bottom: 0; left: 58px; right: 8px; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: crosshair; }
+.tl-block {
+  position: absolute; display: flex; align-items: flex-start; gap: 4px; padding: 5px 4px 5px 9px; border-radius: 9px; overflow: hidden; cursor: pointer;
+  background: color-mix(in srgb, var(--c) 15%, var(--card)); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); border-left: 4px solid var(--c);
+  color: var(--ink); transition: transform .1s;
+}
+.tl-block:hover { transform: translateX(2px); }
+.tl-block:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tl-block.imp { border-left-color: var(--imp); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--imp) 40%, transparent); }
+.tl-block.live { box-shadow: 0 0 0 2px var(--accent); }
+.tl-block.done { opacity: .5; }
+.tl-block.done .tl-b-title { text-decoration: line-through; }
+.tl-b-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tl-b-title { font-weight: 700; font-size: .95rem; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; }
+.tl-b-time { font-size: .74rem; color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl-block .badge { font-size: .66rem; padding: 0 5px; margin-right: 4px; }
+.tl-block.short .tl-b-main { flex-direction: row; align-items: baseline; gap: 6px; }
+.tl-block.short .tl-b-title, .tl-block.xs .tl-b-title { white-space: nowrap; }
+.tl-block.xs { padding-top: 1px; padding-bottom: 1px; align-items: center; }
+.tl-block.xs .tl-b-main { flex-direction: row; align-items: baseline; gap: 6px; }
+.tl-block.xs .tl-b-title { font-size: .8rem; }
+.tl-block.xs .tl-b-time { font-size: .68rem; }
+.tl-check { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; color: transparent; }
+.tl-check .ic { width: 20px; height: 20px; padding: 2px; border-radius: 6px; border: 2px solid color-mix(in srgb, var(--c) 45%, var(--line)); background: var(--card); stroke-width: 3; }
+.tl-check:hover .ic { border-color: var(--ok); color: var(--ok); }
+.tl-block.done .tl-check .ic { background: var(--ok); border-color: var(--ok); color: #fff; }
+.tl-block.xs .tl-check { height: 20px; }
+.tl-block.xs .tl-check .ic { width: 16px; height: 16px; }
+.tl-sel { position: absolute; left: 0; right: 0; border-radius: 9px; background: color-mix(in srgb, var(--accent) 18%, transparent); border: 2px dashed var(--accent); pointer-events: none; z-index: 3; }
+.tl-sel span { position: absolute; left: 8px; top: 4px; font-size: .8rem; font-weight: 800; color: var(--accent); background: var(--card); padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
+.tl-now { position: absolute; left: -6px; right: 0; height: 0; border-top: 2px solid var(--imp); z-index: 2; pointer-events: none; }
+.tl-now::before { content: ""; position: absolute; left: -4px; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--imp); }
+.tl-now span { position: absolute; right: 0; top: -20px; font-size: .7rem; font-weight: 800; color: var(--imp); font-variant-numeric: tabular-nums; }
+.tl-hint { margin: 8px 2px 0; font-size: .8rem; color: var(--muted); }
+.tl-hint b { color: var(--ink2); }
+@media (max-width: 760px) {
+  .tl-scroll { max-height: 62vh; }
+  .tl-area { left: 54px; right: 4px; }
+  .tl-half { left: 52px; }
+}
+
 </style>
 </head>
 <body>
@@ -588,6 +638,8 @@ const S = {
   timerSubject: lsGet('studyapp_timer_subject', 'kor'),
   notify: lsGet('studyapp_notify', false),
   imgUrls: {},
+  taskView: lsGet('studyapp_taskview', 'timeline'),
+  tlScroll: {}, tlDragging: false,
 };
 let backend = null;
 let unsubs = [];
@@ -851,6 +903,7 @@ function renderView() {
   }[v] || viewHome)();
   $('#view').innerHTML = html;
   tickClocks();
+  bindTimeline();
   if (v === 'subject' && S.subTab === 'notes') loadThumbs();
 }
 
@@ -884,6 +937,143 @@ function emptyTasks(key) {
 }
 
 /* ════════════════════════════════════════════════════════════
+   타임라인 (플래너처럼 시간표에서 고르기)
+   ════════════════════════════════════════════════════════════ */
+const TL = { ppm: 64 / 60, snap: 10, maxEnd: 23 * 60 + 55 };
+
+function layoutLanes(list) {
+  const items = list.map(t => ({ t, s: toMin(t.start), e: Math.max(toMin(t.end), toMin(t.start) + 5) }));
+  const out = [];
+  let cluster = [], clusterEnd = -1;
+  const flush = () => {
+    const lanes = [];
+    for (const it of cluster) {
+      let i = lanes.findIndex(end => end <= it.s);
+      if (i < 0) { i = lanes.length; lanes.push(0); }
+      lanes[i] = it.e; it.lane = i;
+    }
+    cluster.forEach(it => { it.lanes = lanes.length; out.push(it); });
+    cluster = [];
+  };
+  for (const it of items) {
+    if (cluster.length && it.s >= clusterEnd) flush();
+    cluster.push(it); clusterEnd = Math.max(clusterEnd, it.e);
+  }
+  if (cluster.length) flush();
+  return out;
+}
+
+function taskViewToggle() {
+  return `<div class="seg view-seg">
+    <button class="${S.taskView === 'timeline' ? 'on' : ''}" data-act="task-view" data-v="timeline">${icon('clock')}타임라인</button>
+    <button class="${S.taskView === 'list' ? 'on' : ''}" data-act="task-view" data-v="list">${icon('check')}목록</button>
+  </div>`;
+}
+
+function timelineHTML(key) {
+  const list = tasksOn(key);
+  let startH = 6;
+  if (list.length) startH = Math.min(startH, Math.floor(Math.min(...list.map(t => toMin(t.start))) / 60));
+  const r0 = startH * 60, r1 = 24 * 60, ppm = TL.ppm;
+  const isToday = key === todayKey(), nm = nowMin();
+  let hours = '';
+  for (let h = startH; h < 24; h++) {
+    hours += `<div class="tl-hour" style="top:${(h * 60 - r0) * ppm}px"><span>${pad(h)}:00</span></div>
+              <div class="tl-half" style="top:${(h * 60 + 30 - r0) * ppm}px"></div>`;
+  }
+  const blocks = layoutLanes(list).map(({ t, s, e, lane, lanes }) => {
+    const h = (e - s) * ppm, sj = t.subject ? subj(t.subject) : null;
+    const live = isToday && !t.done && s <= nm && nm < e;
+    const size = h < 30 ? 'xs' : h < 52 ? 'short' : '';
+    return `<div class="tl-block ${size} ${t.important ? 'imp' : ''} ${t.done ? 'done' : ''} ${live ? 'live' : ''}"
+      data-act="edit-task" data-id="${t.id}" role="button" tabindex="0"
+      style="top:${(s - r0) * ppm}px;height:${h}px;left:calc(${lane} * 100% / ${lanes});width:calc(100% / ${lanes} - 4px);--c:${sj ? sj.color : 'var(--accent)'}">
+      <span class="tl-b-main">
+        <span class="tl-b-title">${t.important ? '<span class="badge imp">중요</span>' : ''}${esc(t.title)}</span>
+        <span class="tl-b-time">${t.start}–${t.end}${sj ? ` · ${sj.short}` : ''}</span>
+      </span>
+      <button class="tl-check" data-act="toggle-task" data-id="${t.id}" aria-label="${t.done ? '완료 취소' : '완료'}">${icon('check')}</button>
+    </div>`;
+  }).join('');
+  const now = isToday && nm >= r0 ? `<div class="tl-now" style="top:${(nm - r0) * ppm}px"><span>${fromMin(nm)}</span></div>` : '';
+  return `<div class="tl" data-date="${key}" data-r0="${r0}" data-r1="${r1}">
+    <div class="tl-scroll" id="tl-scroll">
+      <div class="tl-grid" style="height:${(r1 - r0) * ppm + 12}px">
+        ${hours}
+        <div class="tl-area">${blocks}<div class="tl-sel" hidden><span></span></div>${now}</div>
+      </div>
+    </div>
+    <p class="tl-hint">빈 칸을 <b>톡</b> → 그 시간부터 1시간 · <b>꾹 누른 채 끌기</b> → 원하는 시간만큼 · 블록을 누르면 수정</p>
+  </div>`;
+}
+
+function bindTimeline() {
+  const area = $('.tl-area'); if (!area) return;
+  const tl = area.closest('.tl'), sc = $('#tl-scroll');
+  const r0 = +tl.dataset.r0, r1 = +tl.dataset.r1, key = tl.dataset.date;
+  // 스크롤 위치 유지 / 처음엔 지금 시각(또는 첫 일정) 근처로
+  if (S.tlScroll[key] != null) sc.scrollTop = S.tlScroll[key];
+  else {
+    const first = tasksOn(key)[0];
+    const target = key === todayKey() ? nowMin() - 60 : first ? toMin(first.start) - 30 : 8 * 60;
+    sc.scrollTop = Math.max(0, (target - r0) * TL.ppm);
+  }
+  sc.addEventListener('scroll', () => { S.tlScroll[key] = sc.scrollTop; }, { passive: true });
+
+  const sel = area.querySelector('.tl-sel');
+  const minAt = y => Math.min(r1, Math.max(r0, r0 + (y - area.getBoundingClientRect().top) / TL.ppm));
+  const down = m => Math.floor(m / TL.snap) * TL.snap;
+  const up = m => Math.ceil(m / TL.snap) * TL.snap;
+  const range = st => {
+    let a = Math.min(st.m0, down(st.cur)), b = Math.max(st.m0 + TL.snap, up(st.cur));
+    if (b <= a) b = a + TL.snap;
+    b = Math.min(b, TL.maxEnd); a = Math.min(a, b - 5);
+    return [a, b];
+  };
+  const draw = st => {
+    const [a, b] = range(st);
+    sel.hidden = false;
+    sel.style.top = (a - r0) * TL.ppm + 'px';
+    sel.style.height = (b - a) * TL.ppm + 'px';
+    sel.firstElementChild.textContent = `${fromMin(a)} – ${fromMin(b)} · ${fmtDur(b - a)}`;
+  };
+  let st = null;
+  const reset = () => { if (st) clearTimeout(st.timer); st = null; S.tlDragging = false; sel.hidden = true; };
+
+  area.addEventListener('pointerdown', e => {
+    if (e.target.closest('.tl-block') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const m0 = down(minAt(e.clientY));
+    st = { m0, cur: m0 + TL.snap, x: e.clientX, y: e.clientY, id: e.pointerId, active: false, moved: false };
+    const activate = () => {
+      if (!st) return;
+      st.active = true; S.tlDragging = true; draw(st);
+      try { area.setPointerCapture(st.id); } catch { }
+      try { navigator.vibrate?.(10); } catch { }
+    };
+    if (e.pointerType === 'mouse') activate(); else st.timer = setTimeout(activate, 260);
+  });
+  area.addEventListener('pointermove', e => {
+    if (!st || e.pointerId !== st.id) return;
+    if (!st.active) { if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > 8) reset(); return; }
+    const m = minAt(e.clientY);
+    if (Math.abs(m - st.m0) > 3) st.moved = true;
+    st.cur = m; draw(st);
+  });
+  // 끄는 동안 화면이 같이 스크롤되지 않게
+  area.addEventListener('touchmove', e => { if (st && st.active) e.preventDefault(); }, { passive: false });
+  area.addEventListener('pointerup', e => {
+    if (!st || e.pointerId !== st.id) return;
+    const s = st; let a, b;
+    if (s.moved) [a, b] = range(s);
+    else { a = s.m0; b = Math.min(a + 60, TL.maxEnd); if (b <= a) { a = TL.maxEnd - 30; b = TL.maxEnd; } }
+    reset();
+    openTaskModal(null, key, { start: fromMin(a), end: fromMin(b) });
+  });
+  area.addEventListener('pointercancel', reset);
+  area.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+/* ════════════════════════════════════════════════════════════
    홈
    ════════════════════════════════════════════════════════════ */
 function viewHome() {
@@ -909,13 +1099,14 @@ function viewHome() {
       </div>
       ${list.length ? `
       <div class="progress"><span style="width:${pct}%"></span><em>${pct}%</em></div>
-      <div class="seg">
+      ${S.taskView === 'list' ? `<div class="seg">
         <button class="${S.homeFilter === 'all' ? 'on' : ''}" data-act="home-filter" data-v="all">전체 ${list.length}</button>
         <button class="${S.homeFilter === 'imp' ? 'on' : ''}" data-act="home-filter" data-v="imp">중요만 ${list.filter(t => t.important).length}</button>
-      </div>` : ''}
-      <div class="task-list big">
+      </div>` : ''}` : ''}
+      ${taskViewToggle()}
+      ${S.taskView === 'timeline' ? timelineHTML(key) : `<div class="task-list big">
         ${list.length ? (shown.length ? shown.map(taskItem).join('') : `<div class="empty"><p>중요 표시한 할 일이 없어요.</p></div>`) : emptyTasks(key)}
-      </div>
+      </div>`}
     </section>
 
     <div class="home-side">
@@ -1053,7 +1244,8 @@ function viewDay() {
       </div>
     </div>
     ${list.length ? `<div class="progress"><span style="width:${pct}%"></span><em>${pct}%</em></div>` : ''}
-    <div class="task-list">${list.length ? list.map(taskItem).join('') : emptyTasks(key)}</div>
+    ${taskViewToggle()}
+    ${S.taskView === 'timeline' ? timelineHTML(key) : `<div class="task-list">${list.length ? list.map(taskItem).join('') : emptyTasks(key)}</div>`}
   </section>
   <section class="card">
     <h3>이날 공부 기록 <span class="muted">· ${fmtDur(sum(sess.map(s => s.minutes)) + sum(lecs.map(l => l.minutes)))}</span></h3>
@@ -1349,7 +1541,7 @@ function tick() {
     lastMinute = m;
     if (todayKey() !== lastDay) { lastDay = todayKey(); fired.clear(); }
     checkAlerts();
-    if (['home', 'day', 'calendar'].includes(S.view) && !$('#modal-root').children.length) renderView();
+    if (['home', 'day', 'calendar'].includes(S.view) && !$('#modal-root').children.length && !S.tlDragging) renderView();
     renderNotifier(false);
   }
 }
@@ -1387,9 +1579,11 @@ function subjectSelect(name, selected, { none = false, subs = false } = {}) {
   return `<select name="${name}">${o}</select>`;
 }
 
-function openTaskModal(task, date) {
+function openTaskModal(task, date, preset) {
   let t = task;
-  if (!t) {
+  if (!t && preset) {
+    t = { title: '', subject: '', date, start: preset.start, end: preset.end, important: false, memo: '' };
+  } else if (!t) {
     const day = tasksOn(date);
     let start = 9 * 60;
     if (day.length) start = Math.max(...day.map(x => toMin(x.end)));
@@ -1727,6 +1921,7 @@ function bindEvents() {
         f.end_h.value = h; f.end_m.value = m;
         break;
       }
+      case 'task-view': S.taskView = el.dataset.v; lsSet('studyapp_taskview', S.taskView); renderView(); break;
       case 'home-filter': S.homeFilter = el.dataset.v; renderView(); break;
 
       case 'cal-move': S.calMonth = new Date(S.calMonth.getFullYear(), S.calMonth.getMonth() + Number(el.dataset.n), 1); renderView(); break;
@@ -1793,7 +1988,10 @@ function bindEvents() {
     }
   });
 
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal-root').children.length) closeModal(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $('#modal-root').children.length) closeModal();
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.tl-block')) { e.preventDefault(); e.target.click(); }
+  });
   window.addEventListener('hashchange', route);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.user) { lastMinute = -1; tick(); backend.refresh?.(); } });
 }
