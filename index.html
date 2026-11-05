@@ -485,6 +485,12 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background
   .today-head .btn.primary { width: 100%; }
 }
 
+.login-form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.login-label { font-weight: 700; font-size: .9rem; }
+.login-form input { width: 100%; font: inherit; font-size: 18px; padding: 14px 16px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); outline: none; }
+.login-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.btn.big { height: 52px; font-size: 1.05rem; }
+
 </style>
 </head>
 <body>
@@ -629,100 +635,69 @@ function demoBackend() {
 async function supabaseBackend() {
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   const { cache, listeners, emit } = makeCache();
-  let userId;           // undefined = 아직 모름
-  let channel = null;
+  const KEY_LS = 'studyapp_key';
+  const BUCKET = 'study-photos';
+  let key = null, folder = null, authCb = null, pollT = null, pending = 0;
   const fail = (what, error) => { console.error(what, error); toast(`${what} 실패: ${error?.message || error}`); };
+  const sha = async s => {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('studyapp-photo:' + s));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+  const asUser = k => ({ uid: k, displayName: '내 공부방', photoURL: '', email: '' });
+  const track = p => { pending++; return p.then(({ error }) => { pending--; if (error) fail('저장', error); }, e => { pending--; fail('저장', e); }); };
 
-  const applyRow = row => {
-    if (!row || !KINDS.includes(row.kind)) return;
-    cache[row.kind].set(row.id, { ...(row.data || {}), id: row.id });
-    emit(row.kind);
-  };
-  const dropId = id => {
-    for (const k of KINDS) if (cache[k].delete(id)) { emit(k); return; }
-  };
+  async function pull(quiet) {
+    if (!key || pending) return;
+    const { data, error } = await sb.rpc('study_load', { p_key: key });
+    if (error) { if (!quiet) fail('불러오기', error); return; }
+    if (pending) return; // 그 사이 저장이 생겼으면 다음에
+    KINDS.forEach(k => cache[k].clear());
+    (data || []).forEach(r => KINDS.includes(r.kind) && cache[r.kind].set(r.id, { ...(r.data || {}), id: r.id }));
+    KINDS.forEach(emit);
+  }
   const write = (k, id) => {
     const o = cache[k].get(id); if (!o) return;
     const { id: _drop, ...data } = o;
-    sb.from('items').upsert({ id, user_id: userId, kind: k, data, updated_at: new Date().toISOString() })
-      .then(({ error }) => error && fail('저장', error));
+    track(sb.rpc('study_upsert', { p_key: key, p_id: id, p_kind: k, p_data: data }));
   };
-  const B = 'notes';
-  const full = p => `${userId}/${p}`;
 
   return {
-    demo: false,
-    onAuth(cb) {
-      sb.auth.onAuthStateChange((_ev, session) => {
-        const u = session?.user || null;
-        const id = u?.id || null;
-        if (id === userId) return;
-        userId = id;
-        // Supabase 권고: 콜백 안에서 바로 다른 요청을 await 하지 않도록 한 틱 미룸
-        setTimeout(() => cb(u ? {
-          uid: u.id, email: u.email,
-          displayName: u.user_metadata?.full_name || u.user_metadata?.name || u.email,
-          photoURL: u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
-        } : null), 0);
-      });
-    },
-    async signIn() {
-      const { error } = await sb.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: 'select_account' } },
-      });
-      if (error) throw error;
+    demo: false, keyLogin: true,
+    onAuth(cb) { authCb = cb; key = lsGet(KEY_LS); cb(key ? asUser(key) : null); },
+    async signIn(k) {
+      k = String(k || '').trim();
+      if (k.length < 4) throw new Error('아이디는 4글자 이상으로 해 주세요.');
+      key = k; lsSet(KEY_LS, k); authCb(asUser(k));
     },
     async signOut() {
-      if (channel) { sb.removeChannel(channel); channel = null; }
+      key = null; folder = null; lsSet(KEY_LS, null); clearInterval(pollT);
       KINDS.forEach(k => cache[k].clear());
-      await sb.auth.signOut();
+      authCb(null);
     },
     async load() {
+      folder = await sha(key);
       KINDS.forEach(k => cache[k].clear());
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const { data, error } = await sb.from('items').select('id,kind,data').order('id').range(from, from + PAGE - 1);
-        if (error) { fail('불러오기', error); break; }
-        data.forEach(r => KINDS.includes(r.kind) && cache[r.kind].set(r.id, { ...(r.data || {}), id: r.id }));
-        if (data.length < PAGE) break;
-      }
-      KINDS.forEach(emit);
-      if (channel) sb.removeChannel(channel);
-      channel = sb.channel('items-' + userId)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `user_id=eq.${userId}` }, p => {
-          if (p.eventType === 'DELETE') dropId(p.old?.id);
-          else applyRow(p.new);
-        })
-        .subscribe();
+      await pull(false);
+      clearInterval(pollT);
+      pollT = setInterval(() => { if (!document.hidden) pull(true); }, 30000);
     },
+    refresh() { return pull(true); },
     subscribe(k, cb) { listeners[k].add(cb); cb([...cache[k].values()]); return () => listeners[k].delete(cb); },
     add(k, data) { const id = uid(); cache[k].set(id, { ...data, id }); emit(k); write(k, id); return id; },
     update(k, id, patch) { const o = cache[k].get(id); if (!o) return; cache[k].set(id, { ...o, ...patch }); emit(k); write(k, id); },
-    remove(k, id) {
-      cache[k].delete(id); emit(k);
-      sb.from('items').delete().eq('id', id).then(({ error }) => error && fail('삭제', error));
-    },
+    remove(k, id) { cache[k].delete(id); emit(k); track(sb.rpc('study_delete', { p_key: key, p_id: id })); },
     async uploadImage(path, blob) {
-      const { error } = await sb.storage.from(B).upload(full(path), blob, { contentType: 'image/jpeg', upsert: true });
+      const { error } = await sb.storage.from(BUCKET).upload(`${folder}/${path}`, blob, { contentType: 'image/jpeg', upsert: false });
       if (error) { fail('사진 업로드', error); return false; }
       return true;
     },
     async imageUrls(paths) {
-      if (!paths.length) return {};
-      const { data, error } = await sb.storage.from(B).createSignedUrls(paths.map(full), 60 * 60 * 6);
-      if (error) { fail('사진 불러오기', error); return {}; }
-      const out = {};
-      data.forEach((d, i) => { out[paths[i]] = d.signedUrl || ''; });
-      return out;
+      return Object.fromEntries(paths.map(p => [p, sb.storage.from(BUCKET).getPublicUrl(`${folder}/${p}`).data.publicUrl]));
     },
-    async removeImages(paths) {
-      const { error } = await sb.storage.from(B).remove(paths.map(full));
-      if (error) fail('사진 삭제', error);
-    },
+    async removeImages() { /* 노트 목록에서만 지워요. (보안상 사진 파일 삭제 권한은 열어 두지 않음) */ },
   };
 }
 
@@ -791,11 +766,15 @@ function renderLogin() {
       <div class="login-logo">${icon('check')}</div>
       <h1>공부 관리</h1>
       <p class="muted">오늘 할 일 · 공부 시간 · 인강 · 과목 노트를 한 곳에서</p>
-      <button class="btn google" data-act="login">
-        ${backend.demo ? icon('start') : `<svg viewBox="0 0 48 48" class="ic" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>`}
-        ${backend.demo ? '체험 모드로 시작하기' : 'Google 계정으로 시작하기'}
-      </button>
-      ${backend.demo ? `<p class="login-note"><b>체험 모드</b> — 아직 Supabase가 연결되지 않아서 데이터가 이 브라우저에만 저장돼요. <code>supabase-config.js</code>를 채우면 구글 로그인으로 바뀝니다.</p>` : ''}
+      ${backend.keyLogin ? `
+      <form data-form="login" class="login-form">
+        <label for="login-id" class="login-label">내 아이디</label>
+        <input id="login-id" name="id" required minlength="4" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="나만 아는 아이디" value="${esc(lsGet('studyapp_last_id', '') || '')}">
+        <button class="btn primary big">${icon('start')}시작하기</button>
+      </form>
+      <p class="login-note">같은 아이디를 넣으면 아이패드·폰 어디서든 내 데이터가 나와요. 처음 쓰는 아이디면 새 공부방이 만들어져요.<br>아이디가 열쇠 역할을 하니 <b>남이 짐작하기 어렵게</b> 정하고, 대소문자까지 똑같이 넣어야 해요.</p>` : `
+      <button class="btn google" data-act="login">${icon('start')}체험 모드로 시작하기</button>`}
+      ${backend.demo ? `<p class="login-note"><b>체험 모드</b> — 아직 Supabase가 연결되지 않아서 데이터가 이 브라우저에만 저장돼요.</p>` : ''}
     </div>
   </div>`;
 }
@@ -828,7 +807,7 @@ function renderShell() {
           <span class="tb-avatar">${avatar}</span>
         </div>
       </header>
-      ${backend.demo ? `<div class="demo-banner">체험 모드 — 데이터가 이 브라우저에만 저장돼요. Supabase를 연결하면 폰·컴퓨터 어디서든 같은 데이터를 볼 수 있어요.</div>` : ''}
+      ${backend.demo ? `<div class="demo-banner">체험 모드 — 데이터가 이 브라우저에만 저장돼요. </div>` : ''}
       <div id="notifier"></div>
       <div id="view"></div>
     </main>
@@ -1580,6 +1559,11 @@ function encode(img, maxSide, quality) {
    폼 저장
    ════════════════════════════════════════════════════════════ */
 const FORMS = {
+  async login(f, fd) {
+    const id = String(fd.get('id') || '').trim();
+    try { lsSet('studyapp_last_id', id); await backend.signIn(id); }
+    catch (err) { toast(err.message || String(err)); }
+  },
   task(f, fd) {
     const start = `${fd.get('start_h')}:${fd.get('start_m')}`, end = `${fd.get('end_h')}:${fd.get('end_m')}`;
     if (toMin(end) <= toMin(start)) return toast('끝나는 시간이 시작 시간보다 늦어야 해요.');
@@ -1705,7 +1689,7 @@ function bindEvents() {
         try { await backend.signIn(); } catch (err) { toast('로그인 실패: ' + (err.message || err)); }
         break;
       case 'logout':
-        if (confirm('로그아웃할까요?')) { unsubs.forEach(f => f()); unsubs = []; await backend.signOut(); }
+        if (confirm(backend.keyLogin ? '이 기기에서 나갈까요? (데이터는 그대로 있고, 아이디를 다시 넣으면 돌아와요)' : '로그아웃할까요?')) { unsubs.forEach(f => f()); unsubs = []; await backend.signOut(); }
         break;
       case 'toggle-notify': {
         if (S.notify) { S.notify = false; lsSet('studyapp_notify', false); toast('소리·팝업 알림을 껐어요. (화면 위 알리미는 계속 보여요)'); }
@@ -1807,7 +1791,7 @@ function bindEvents() {
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal-root').children.length) closeModal(); });
   window.addEventListener('hashchange', route);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.user) { lastMinute = -1; tick(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.user) { lastMinute = -1; tick(); backend.refresh?.(); } });
 }
 
 function route() {
@@ -1839,6 +1823,7 @@ async function startApp(user) {
   for (const k of KINDS) unsubs.push(backend.subscribe(k, arr => { S[k] = arr; renderAll(); }));
   S.loaded = true;
   renderAll();
+  if (backend.keyLogin && KINDS.every(k => !S[k].length)) toast('새 공부방이에요. 이 아이디를 꼭 기억해 두세요!', { timeout: 6000 });
   lastMinute = nowMin(); // 접속 직후 지난 알림이 한꺼번에 뜨지 않도록
 }
 
