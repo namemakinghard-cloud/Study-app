@@ -4,7 +4,7 @@
 <!-- ═══════════ ⚙️ 설정 (여기만 바꾸면 돼요) ═══════════
      Supabase 주소와 키를 따옴표 안에 넣으세요. 비워 두면 '체험 모드'로 실행돼요. -->
 <script>
-  window.SUPABASE_URL = "https://wzxfreyzgmdavwtcwctp.supabase.co";
+  window.SUPABASE_URL = "https://wzxfreyzgmdavwtcwctp.supabase";
   window.SUPABASE_ANON_KEY = "sb_publishable_Not6RhrGK-vcJW49oAJdyw_N5IXcfab";
 </script>
 <!-- ═══════════════════════════════════════════════ -->
@@ -293,7 +293,10 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background
 .cal-head { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
 .cal-head h2 { font-size: 1.35rem; min-width: 130px; text-align: center; }
 .cal-head .btn { margin-left: auto; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.cal { --gap: 5px; --bar-top: 34px; --lane-h: 20px; }
+.cal-wds, .cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--gap); }
+.cal-weeks { display: flex; flex-direction: column; gap: var(--gap); }
+.cal-week { position: relative; }
 .cal-wd { text-align: center; font-size: .8rem; font-weight: 700; color: var(--muted); padding: 4px 0; }
 .sun .cal-num, .cal-wd.sun { color: var(--imp); }
 .sat .cal-num, .cal-wd.sat { color: var(--accent); }
@@ -472,7 +475,7 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background
   .task-list.big .check { width: 54px; }
   .cal-cell { min-height: 64px; padding: 4px; border-radius: 9px; }
   .cal-titles { display: none; }
-  .cal-grid { gap: 3px; }
+  .cal { --gap: 3px; --bar-top: 29px; --lane-h: 16px; }
   .cal-num { width: 22px; height: 22px; font-size: .82rem; }
   .cal-foot { flex-direction: column; align-items: flex-start; }
   .cal-count, .cal-min { font-size: .64rem; }
@@ -545,6 +548,93 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background
   .tl-half { left: 52px; }
 }
 
+/* ── 기간 일정 막대 ─────────────────────── */
+.cal-cell { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.cal-cell.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--soft)); }
+.cal-evspace { display: block; flex: none; height: calc(var(--lanes, 0) * var(--lane-h)); }
+.cal-evmore { font-size: .62rem; font-weight: 800; color: var(--muted); margin-left: auto; margin-right: 3px; }
+.cal-ev {
+  position: absolute; z-index: 2; top: calc(var(--bar-top) + var(--lane) * var(--lane-h)); height: calc(var(--lane-h) - 3px);
+  left: calc((100% - 6 * var(--gap)) / 7 * var(--cs) + var(--gap) * var(--cs) + 3px);
+  width: calc((100% - 6 * var(--gap)) / 7 * var(--sp) + var(--gap) * (var(--sp) - 1) - 6px);
+  display: flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 6px; overflow: hidden;
+  background: var(--c); color: #fff; font-size: .72rem; font-weight: 700; line-height: 1; white-space: nowrap;
+}
+.cal-ev span { overflow: hidden; text-overflow: ellipsis; }
+.cal-ev b { font-weight: 800; background: rgba(255,255,255,.25); border-radius: 4px; padding: 1px 4px; flex: none; }
+.cal-ev.cont-l { border-top-left-radius: 0; border-bottom-left-radius: 0; left: calc((100% - 6 * var(--gap)) / 7 * var(--cs) + var(--gap) * var(--cs)); width: calc((100% - 6 * var(--gap)) / 7 * var(--sp) + var(--gap) * (var(--sp) - 1) - 3px); }
+.cal-ev.cont-r { border-top-right-radius: 0; border-bottom-right-radius: 0; width: calc((100% - 6 * var(--gap)) / 7 * var(--sp) + var(--gap) * (var(--sp) - 1) - 3px); }
+.cal-ev.cont-l.cont-r { width: calc((100% - 6 * var(--gap)) / 7 * var(--sp) + var(--gap) * (var(--sp) - 1)); }
+.cal-ev:hover { filter: brightness(1.08); }
+.cal-head-r { margin-left: auto; display: flex; gap: 6px; }
+.cal-head .cal-head-r .btn { margin-left: 0; }
+.cal-legend b { color: var(--ink2); }
+.ev-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.ev-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--soft); }
+.ev-item:hover { background: var(--line); }
+.ev-item > i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.ev-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ev-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-main small { color: var(--muted); font-size: .8rem; }
+.ev-dday { flex: none; font-weight: 800; font-size: .85rem; color: var(--c, var(--accent)); font-variant-numeric: tabular-nums; }
+.ev-item .ev-dday { color: var(--c); }
+.ev-dday.past, .ev-dday.off { color: var(--muted); font-weight: 600; font-size: .78rem; }
+
+/* 하루 화면의 기간 일정 */
+.day-events { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.day-ev { display: inline-flex; align-items: baseline; gap: 8px; padding: 8px 14px; border-radius: 12px; background: color-mix(in srgb, var(--c) 14%, var(--card)); border-left: 4px solid var(--c); }
+.day-ev b { color: var(--c); }
+.day-ev small { color: var(--muted); font-size: .8rem; font-weight: 600; }
+
+/* ── 홈 D-day ───────────────────────────── */
+.dday-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.dday {
+  display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--r); text-align: left;
+  background: var(--card); box-shadow: var(--shadow); border-left: 6px solid var(--c); min-width: 0;
+}
+.dday:hover { transform: translateY(-1px); }
+.dday-num { flex: none; font-size: 1.7rem; font-weight: 900; letter-spacing: -.03em; color: var(--c); font-variant-numeric: tabular-nums; line-height: 1; }
+.dday.today .dday-num { font-size: 1.5rem; }
+.dday.on .dday-num { font-size: 1.35rem; }
+.dday-txt { min-width: 0; display: flex; flex-direction: column; }
+.dday-txt b { font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dday-txt small { color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dday.today { background: color-mix(in srgb, var(--c) 10%, var(--card)); }
+
+/* 기간 일정 창 */
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatches input { position: absolute; opacity: 0; pointer-events: none; }
+.swatches span { display: block; width: 32px; height: 32px; border-radius: 50%; background: var(--c); cursor: pointer; border: 3px solid transparent; box-shadow: 0 0 0 1px var(--line); }
+.swatches input:checked + span { border-color: var(--card); box-shadow: 0 0 0 2px var(--c); }
+.swatches input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ev-len { margin: -6px 0 0; }
+.toggle-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--soft); cursor: pointer; position: relative; }
+.toggle-line > span { display: flex; flex-direction: column; }
+.toggle-line small { color: var(--muted); font-size: .8rem; }
+.toggle-line input { position: absolute; opacity: 0; pointer-events: none; }
+.toggle-line i { flex: none; width: 48px; height: 28px; border-radius: 99px; background: var(--line); position: relative; transition: background .15s; }
+.toggle-line i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .15s; }
+.toggle-line input:checked + i { background: var(--ok); }
+.toggle-line input:checked + i::after { transform: translateX(20px); }
+.toggle-line input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 타임라인: 다음날 구간 */
+.tl-nextband { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--accent) 5%, transparent); pointer-events: none; }
+.tl-hour.mid { border-top: 2px solid color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.tl-hour.mid em { position: absolute; right: 10px; top: 4px; font-style: normal; font-size: .72rem; font-weight: 800; color: var(--accent); }
+.tl-hour.next span { color: var(--accent); }
+.tl-hour.end { border-top: 2px solid var(--line); }
+
+@media (max-width: 760px) {
+  .cal-ev { font-size: .6rem; padding: 0 4px; }
+  .cal-ev b { display: none; }
+  .cal-head { flex-wrap: wrap; }
+  .cal-head-r { width: 100%; justify-content: flex-end; }
+  .dday-row { grid-template-columns: 1fr; gap: 8px; }
+  .dday { padding: 12px 14px; }
+  .dday-num { font-size: 1.45rem; }
+}
+
 </style>
 </head>
 <body>
@@ -568,7 +658,9 @@ const SUBJECTS = [
 ];
 const ETC = { id: 'etc', name: '기타', short: '기타', color: '#7b808c', subs: [] };
 const subj = id => SUBJECTS.find(s => s.id === id) || ETC;
-const KINDS = ['tasks', 'lectures', 'sessions', 'questions', 'notes'];
+const KINDS = ['tasks', 'lectures', 'sessions', 'questions', 'notes', 'events'];
+const DAY_END = 3 * 60;          // 하루는 다음날 새벽 3시까지
+const DAY_MAX = 24 * 60 + DAY_END; // 27:00
 
 /* ════════════════════════════════════════════════════════════
    유틸
@@ -577,12 +669,21 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const todayKey = () => ymd(new Date());
+const plannerAt = (d = new Date()) => {
+  const m = d.getHours() * 60 + d.getMinutes();
+  if (m < DAY_END) { const y = new Date(d); y.setDate(y.getDate() - 1); return { key: ymd(y), min: m + 1440 }; }
+  return { key: ymd(d), min: m };
+};
+const todayKey = () => plannerAt().key;
 const parseYmd = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const addDays = (key, n) => { const d = parseYmd(key); d.setDate(d.getDate() + n); return ymd(d); };
 const toMin = hm => { const [h, m] = String(hm || '0:0').split(':').map(Number); return h * 60 + m; };
 const fromMin = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
-const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+const nowMin = () => plannerAt().min;
+// 화면 표시용: 24시 이후는 '다음날 01:00'처럼
+const T = hm => { const [h, m] = String(hm || '0:0').split(':').map(Number); return h >= 24 ? `다음날 ${pad(h - 24)}:${pad(m)}` : `${pad(h)}:${pad(m)}`; };
+const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 86400000);
+const fmtMD = key => { const d = parseYmd(key); return `${d.getMonth() + 1}/${d.getDate()}`; };
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const fmtDur = min => {
   min = Math.round(min || 0);
@@ -639,7 +740,7 @@ const S = {
   notify: lsGet('studyapp_notify', false),
   imgUrls: {},
   taskView: lsGet('studyapp_taskview', 'timeline'),
-  tlScroll: {}, tlDragging: false,
+  tlScroll: {}, tlDragging: false, calDragging: false, suppressDayClick: false, events: [],
 };
 let backend = null;
 let unsubs = [];
@@ -792,7 +893,7 @@ function stopTimer(save = true) {
     else {
       const st = new Date(t.startedAt), en = new Date();
       backend.add('sessions', {
-        date: ymd(st), subject: t.subject, minutes,
+        date: plannerAt(st).key, subject: t.subject, minutes,
         start: `${pad(st.getHours())}:${pad(st.getMinutes())}`, end: `${pad(en.getHours())}:${pad(en.getMinutes())}`,
         createdAt: Date.now(),
       });
@@ -904,6 +1005,7 @@ function renderView() {
   $('#view').innerHTML = html;
   tickClocks();
   bindTimeline();
+  bindCalendar();
   if (v === 'subject' && S.subTab === 'notes') loadThumbs();
 }
 
@@ -920,7 +1022,7 @@ function taskItem(t) {
   <div class="task ${t.important ? 'imp' : ''} ${t.done ? 'done' : ''} ${live ? 'live' : ''}">
     <button class="check" data-act="toggle-task" data-id="${t.id}" aria-label="${t.done ? '완료 취소' : '완료'}">${icon('check')}</button>
     <button class="task-body" data-act="edit-task" data-id="${t.id}">
-      <span class="task-time">${t.start} – ${t.end}<span class="dot">·</span>${fmtDur(e - s)}
+      <span class="task-time">${T(t.start)} – ${T(t.end)}<span class="dot">·</span>${fmtDur(e - s)}
         ${live ? `<span class="badge live">진행 중</span>` : ''}${missed ? `<span class="badge miss">시간 지남</span>` : ''}</span>
       <span class="task-title">${t.important ? `<span class="badge imp">중요</span>` : ''}${esc(t.title)}</span>
       ${(t.subject || t.memo) ? `<span class="task-meta">${t.subject ? chip(t.subject) : ''}${t.memo ? `<span class="memo">${esc(t.memo)}</span>` : ''}</span>` : ''}
@@ -939,7 +1041,7 @@ function emptyTasks(key) {
 /* ════════════════════════════════════════════════════════════
    타임라인 (플래너처럼 시간표에서 고르기)
    ════════════════════════════════════════════════════════════ */
-const TL = { ppm: 64 / 60, snap: 10, maxEnd: 23 * 60 + 55 };
+const TL = { ppm: 64 / 60, snap: 10, maxEnd: DAY_MAX };
 
 function layoutLanes(list) {
   const items = list.map(t => ({ t, s: toMin(t.start), e: Math.max(toMin(t.end), toMin(t.start) + 5) }));
@@ -974,13 +1076,15 @@ function timelineHTML(key) {
   const list = tasksOn(key);
   let startH = 6;
   if (list.length) startH = Math.min(startH, Math.floor(Math.min(...list.map(t => toMin(t.start))) / 60));
-  const r0 = startH * 60, r1 = 24 * 60, ppm = TL.ppm;
+  const r0 = startH * 60, r1 = DAY_MAX, ppm = TL.ppm;
   const isToday = key === todayKey(), nm = nowMin();
   let hours = '';
-  for (let h = startH; h < 24; h++) {
-    hours += `<div class="tl-hour" style="top:${(h * 60 - r0) * ppm}px"><span>${pad(h)}:00</span></div>
+  for (let h = startH; h < DAY_MAX / 60; h++) {
+    hours += `<div class="tl-hour ${h === 24 ? 'mid' : ''} ${h >= 24 ? 'next' : ''}" style="top:${(h * 60 - r0) * ppm}px"><span>${pad(h % 24)}:00</span>${h === 24 ? '<em>다음날</em>' : ''}</div>
               <div class="tl-half" style="top:${(h * 60 + 30 - r0) * ppm}px"></div>`;
   }
+  hours += `<div class="tl-hour end" style="top:${(DAY_MAX - r0) * ppm}px"><span>${pad(DAY_END / 60)}:00</span></div>`;
+  const nextBand = `<div class="tl-nextband" style="top:${(1440 - r0) * ppm}px;height:${(DAY_MAX - 1440) * ppm}px"></div>`;
   const blocks = layoutLanes(list).map(({ t, s, e, lane, lanes }) => {
     const h = (e - s) * ppm, sj = t.subject ? subj(t.subject) : null;
     const live = isToday && !t.done && s <= nm && nm < e;
@@ -990,16 +1094,16 @@ function timelineHTML(key) {
       style="top:${(s - r0) * ppm}px;height:${h}px;left:calc(${lane} * 100% / ${lanes});width:calc(100% / ${lanes} - 4px);--c:${sj ? sj.color : 'var(--accent)'}">
       <span class="tl-b-main">
         <span class="tl-b-title">${t.important ? '<span class="badge imp">중요</span>' : ''}${esc(t.title)}</span>
-        <span class="tl-b-time">${t.start}–${t.end}${sj ? ` · ${sj.short}` : ''}</span>
+        <span class="tl-b-time">${T(t.start)}–${T(t.end)}${sj ? ` · ${sj.short}` : ''}</span>
       </span>
       <button class="tl-check" data-act="toggle-task" data-id="${t.id}" aria-label="${t.done ? '완료 취소' : '완료'}">${icon('check')}</button>
     </div>`;
   }).join('');
-  const now = isToday && nm >= r0 ? `<div class="tl-now" style="top:${(nm - r0) * ppm}px"><span>${fromMin(nm)}</span></div>` : '';
+  const now = isToday && nm >= r0 ? `<div class="tl-now" style="top:${(nm - r0) * ppm}px"><span>${T(fromMin(nm))}</span></div>` : '';
   return `<div class="tl" data-date="${key}" data-r0="${r0}" data-r1="${r1}">
     <div class="tl-scroll" id="tl-scroll">
-      <div class="tl-grid" style="height:${(r1 - r0) * ppm + 12}px">
-        ${hours}
+      <div class="tl-grid" style="height:${(r1 - r0) * ppm + 14}px">
+        ${nextBand}${hours}
         <div class="tl-area">${blocks}<div class="tl-sel" hidden><span></span></div>${now}</div>
       </div>
     </div>
@@ -1035,7 +1139,7 @@ function bindTimeline() {
     sel.hidden = false;
     sel.style.top = (a - r0) * TL.ppm + 'px';
     sel.style.height = (b - a) * TL.ppm + 'px';
-    sel.firstElementChild.textContent = `${fromMin(a)} – ${fromMin(b)} · ${fmtDur(b - a)}`;
+    sel.firstElementChild.textContent = `${T(fromMin(a))} – ${T(fromMin(b))} · ${fmtDur(b - a)}`;
   };
   let st = null;
   const reset = () => { if (st) clearTimeout(st.timer); st = null; S.tlDragging = false; sel.hidden = true; };
@@ -1088,6 +1192,7 @@ function viewHome() {
   const qBySub = groupBy(openQ, 'subject');
 
   return `
+  ${ddayRow()}
   <div class="home">
     <section class="card today">
       <div class="today-head">
@@ -1158,34 +1263,123 @@ function timerCard(compact) {
 }
 
 /* ════════════════════════════════════════════════════════════
+   기간 일정 (시험 기간처럼 여러 날) & D-day
+   ════════════════════════════════════════════════════════════ */
+const EV_COLORS = ['#3552d6', '#e0453f', '#1f9a5b', '#d18a14', '#8a54d4', '#0f9bb0', '#d6457f', '#5c6472'];
+const eventsOn = key => S.events.filter(e => e.start <= key && key <= e.end).sort((a, b) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end));
+const evLen = e => daysBetween(e.start, e.end) + 1;
+const evRange = e => e.start === e.end ? fmtDateKo(e.start) : `${fmtDateKo(e.start)} ~ ${fmtDateKo(e.end)}`;
+function ddayInfo(e, today = todayKey()) {
+  const d = daysBetween(today, e.start);
+  if (d > 0) return { label: `D-${d}`, sub: `${d}일 남음`, state: 'soon' };
+  if (d === 0) return { label: 'D-DAY', sub: '오늘 시작', state: 'today' };
+  if (today <= e.end) return { label: `${1 - d}일째`, sub: `진행 중 · 총 ${evLen(e)}일`, state: 'on' };
+  return { label: `D+${-d}`, sub: '끝남', state: 'past' };
+}
+
+function ddayRow() {
+  const tk = todayKey();
+  const list = S.events.filter(e => e.dday && e.end >= tk).sort((a, b) => a.start.localeCompare(b.start));
+  if (!list.length) return '';
+  return `<div class="dday-row">
+    ${list.map(e => {
+      const i = ddayInfo(e, tk);
+      return `<button class="dday ${i.state}" style="--c:${e.color || EV_COLORS[0]}" data-act="edit-event" data-id="${e.id}">
+        <span class="dday-num">${i.label}</span>
+        <span class="dday-txt"><b>${esc(e.title)}</b><small>${fmtMD(e.start)}${e.start !== e.end ? ` ~ ${fmtMD(e.end)}` : ''} · ${i.sub}</small></span>
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+
+function openEventModal(ev, preset) {
+  const tk = todayKey();
+  const d = ev || { title: '', start: preset?.start || tk, end: preset?.end || preset?.start || tk, color: EV_COLORS[1], dday: true, memo: '' };
+  openModal(ev ? '기간 일정 수정' : '기간 일정 추가', `
+  <form data-form="event" data-id="${ev?.id || ''}" class="form">
+    <label class="fld"><span>일정 이름</span><input name="title" required maxlength="40" value="${esc(d.title)}" placeholder="예: 2학기 기말고사" autofocus></label>
+    <div class="two">
+      <label class="fld"><span>시작일</span><input type="date" name="start" value="${d.start}" required></label>
+      <label class="fld"><span>종료일</span><input type="date" name="end" value="${d.end}" required></label>
+    </div>
+    <p class="muted small ev-len" id="ev-len"></p>
+    <div class="fld"><span>색</span>
+      <div class="swatches">${EV_COLORS.map(c => `<label><input type="radio" name="color" value="${c}" ${c === d.color ? 'checked' : ''}><span style="--c:${c}"></span></label>`).join('')}</div>
+    </div>
+    <label class="toggle-line">
+      <span><b>D-day 계산</b><small>켜면 홈 화면에 "${'시작일까지 남은 날'}"이 표시돼요</small></span>
+      <input type="checkbox" name="dday" ${d.dday ? 'checked' : ''} role="switch"><i></i>
+    </label>
+    <label class="fld"><span>메모</span><textarea name="memo" rows="2" placeholder="시험 범위, 준비물 등">${esc(d.memo || '')}</textarea></label>
+    <div class="modal-foot">
+      ${ev ? `<button type="button" class="btn danger ghost" data-act="del-event" data-id="${ev.id}">${icon('trash')}삭제</button>` : '<span></span>'}
+      <div class="row-btns"><button type="button" class="btn ghost" data-act="close-modal">취소</button><button class="btn primary">저장</button></div>
+    </div>
+  </form>`);
+  updateEvLen();
+}
+function updateEvLen() {
+  const f = $('form[data-form=event]'); if (!f) return;
+  const a = f.start.value, b = f.end.value, el = $('#ev-len');
+  if (!a || !b) { el.textContent = ''; return; }
+  const [x, y] = a <= b ? [a, b] : [b, a];
+  el.textContent = `총 ${daysBetween(x, y) + 1}일${a > b ? ' (시작일과 종료일이 바뀌어 있어서 저장할 때 순서를 맞출게요)' : ''}`;
+}
+
+/* ════════════════════════════════════════════════════════════
    달력
    ════════════════════════════════════════════════════════════ */
 function viewCalendar() {
   const m = S.calMonth, y = m.getFullYear(), mo = m.getMonth();
   const offset = new Date(y, mo, 1).getDay(), dim = new Date(y, mo + 1, 0).getDate();
-  const total = Math.ceil((offset + dim) / 7) * 7;
+  const weeks = Math.ceil((offset + dim) / 7);
   const tmap = groupBy(S.tasks, 'date'), mmap = studyMap();
   const tk = todayKey();
-  let cells = '';
-  for (let i = 0; i < total; i++) {
-    const d = new Date(y, mo, 1 - offset + i), k = ymd(d);
-    const ts = (tmap[k] || []).slice().sort(byStart);
-    const done = ts.filter(t => t.done).length;
-    const min = mmap[k] || 0;
-    const lvl = !min ? 0 : min < 60 ? 1 : min < 120 ? 2 : min < 240 ? 3 : 4;
-    const impOpen = ts.some(t => t.important && !t.done);
-    cells += `
-    <button class="cal-cell ${d.getMonth() !== mo ? 'out' : ''} ${k === tk ? 'is-today' : ''} heat-${lvl} ${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" data-act="open-day" data-date="${k}">
-      <span class="cal-top"><span class="cal-num">${d.getDate()}</span>${impOpen ? '<span class="cal-imp" title="남은 중요 일정"></span>' : ''}</span>
-      <span class="cal-titles">${ts.slice(0, 3).map(t => `<span class="cal-t ${t.done ? 'done' : ''} ${t.important ? 'imp' : ''}">${esc(t.title)}</span>`).join('')}${ts.length > 3 ? `<span class="cal-more">+${ts.length - 3}</span>` : ''}</span>
-      <span class="cal-foot">${ts.length ? `<span class="cal-count ${done === ts.length ? 'all' : ''}">${done}/${ts.length}</span>` : ''}${min ? `<span class="cal-min">${shortDur(min)}</span>` : ''}</span>
-    </button>`;
+  const MAX_LANES = 3;
+  let body = '';
+  for (let w = 0; w < weeks; w++) {
+    const days = [...Array(7)].map((_, i) => new Date(y, mo, 1 - offset + w * 7 + i));
+    const keys = days.map(ymd), k0 = keys[0], k6 = keys[6];
+    // 이 주에 걸친 기간 일정 → 줄(lane) 배정
+    const evs = S.events.filter(e => e.start <= k6 && e.end >= k0)
+      .sort((a, b) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end));
+    const laneEnd = [], bars = [], hidden = Array(7).fill(0);
+    for (const e of evs) {
+      const cs = e.start < k0 ? 0 : keys.indexOf(e.start), ce = e.end > k6 ? 6 : keys.indexOf(e.end);
+      let lane = laneEnd.findIndex(end => end < cs);
+      if (lane < 0) { lane = laneEnd.length; laneEnd.push(-1); }
+      laneEnd[lane] = ce;
+      if (lane >= MAX_LANES) { for (let c = cs; c <= ce; c++) hidden[c]++; continue; }
+      bars.push(`<button class="cal-ev ${e.start < k0 ? 'cont-l' : ''} ${e.end > k6 ? 'cont-r' : ''}" data-act="edit-event" data-id="${e.id}"
+        style="--cs:${cs};--sp:${ce - cs + 1};--lane:${lane};--c:${e.color || EV_COLORS[0]}" title="${esc(e.title)} · ${evRange(e)}">
+        ${e.dday && e.start >= tk ? `<b>${ddayInfo(e, tk).label}</b>` : ''}<span>${esc(e.title)}</span></button>`);
+    }
+    const lanes = Math.min(laneEnd.length, MAX_LANES);
+    let cells = '';
+    days.forEach((d, i) => {
+      const k = keys[i];
+      const ts = (tmap[k] || []).slice().sort(byStart);
+      const done = ts.filter(t => t.done).length;
+      const min = mmap[k] || 0;
+      const lvl = !min ? 0 : min < 60 ? 1 : min < 120 ? 2 : min < 240 ? 3 : 4;
+      const impOpen = ts.some(t => t.important && !t.done);
+      cells += `
+      <button class="cal-cell ${d.getMonth() !== mo ? 'out' : ''} ${k === tk ? 'is-today' : ''} heat-${lvl} ${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" data-act="open-day" data-date="${k}">
+        <span class="cal-top"><span class="cal-num">${d.getDate()}</span>${hidden[i] ? `<span class="cal-evmore">+${hidden[i]}</span>` : ''}${impOpen ? '<span class="cal-imp" title="남은 중요 할 일"></span>' : ''}</span>
+        <span class="cal-evspace"></span>
+        <span class="cal-titles">${ts.slice(0, 2).map(t => `<span class="cal-t ${t.done ? 'done' : ''} ${t.important ? 'imp' : ''}">${esc(t.title)}</span>`).join('')}${ts.length > 2 ? `<span class="cal-more">+${ts.length - 2}</span>` : ''}</span>
+        <span class="cal-foot">${ts.length ? `<span class="cal-count ${done === ts.length ? 'all' : ''}">${done}/${ts.length}</span>` : ''}${min ? `<span class="cal-min">${shortDur(min)}</span>` : ''}</span>
+      </button>`;
+    });
+    body += `<div class="cal-week" style="--lanes:${lanes}">${cells}${bars.join('')}</div>`;
   }
   const prefix = `${y}-${pad(mo + 1)}`;
   const monthMin = sum(Object.entries(mmap).filter(([k]) => k.startsWith(prefix)).map(([, v]) => v));
   const monthTasks = S.tasks.filter(t => t.date.startsWith(prefix));
   const mDone = monthTasks.filter(t => t.done).length;
   const studyDays = Object.entries(mmap).filter(([k, v]) => k.startsWith(prefix) && v > 0).length;
+  const mStart = `${prefix}-01`, mEnd = `${prefix}-${pad(dim)}`;
+  const monthEvents = S.events.filter(e => e.start <= mEnd && e.end >= mStart).sort((a, b) => a.start.localeCompare(b.start));
 
   return `
   <section class="card cal">
@@ -1193,23 +1387,79 @@ function viewCalendar() {
       <button class="icon-btn" data-act="cal-move" data-n="-1" aria-label="이전 달">${icon('left')}</button>
       <h2>${y}년 ${mo + 1}월</h2>
       <button class="icon-btn" data-act="cal-move" data-n="1" aria-label="다음 달">${icon('right')}</button>
-      <button class="btn ghost sm" data-act="cal-today">오늘</button>
+      <div class="cal-head-r">
+        <button class="btn ghost sm" data-act="cal-today">오늘</button>
+        <button class="btn primary sm" data-act="new-event">${icon('plus')}기간 일정</button>
+      </div>
     </div>
-    <div class="cal-grid">
-      ${WD.map((w, i) => `<div class="cal-wd ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</div>`).join('')}
-      ${cells}
-    </div>
+    <div class="cal-wds">${WD.map((w, i) => `<div class="cal-wd ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</div>`).join('')}</div>
+    <div class="cal-weeks" id="cal-weeks">${body}</div>
     <div class="cal-legend">
-      <span><i class="lg heat-1"></i><i class="lg heat-2"></i><i class="lg heat-3"></i><i class="lg heat-4"></i> 공부 시간이 길수록 진하게</span>
-      <span><i class="cal-imp"></i> 남은 중요 일정</span>
-      <span>날짜를 누르면 그날 할 일로 들어가요</span>
+      <span>날짜를 <b>누르면</b> 그날 할 일로</span>
+      <span>날짜를 <b>꾹 누른 채 끌면</b> 기간 일정 만들기</span>
+      <span><i class="lg heat-1"></i><i class="lg heat-2"></i><i class="lg heat-3"></i><i class="lg heat-4"></i> 공부 시간</span>
+      <span><i class="cal-imp"></i> 남은 중요 할 일</span>
     </div>
   </section>
+  ${monthEvents.length ? `<section class="card">
+    <h3>이번 달 기간 일정</h3>
+    <div class="ev-list">${monthEvents.map(e => {
+      const i = ddayInfo(e, tk);
+      return `<button class="ev-item" data-act="edit-event" data-id="${e.id}" style="--c:${e.color || EV_COLORS[0]}">
+        <i></i><span class="ev-main"><b>${esc(e.title)}</b><small>${evRange(e)} · ${evLen(e)}일</small></span>
+        ${e.dday ? `<span class="ev-dday ${i.state}">${i.label}</span>` : '<span class="ev-dday off">D-day 꺼짐</span>'}
+      </button>`;
+    }).join('')}</div>
+  </section>` : ''}
   <div class="stats-row">
     <div class="card mini-stat"><small>이번 달 공부</small><b>${fmtDur(monthMin)}</b></div>
     <div class="card mini-stat"><small>공부한 날</small><b>${studyDays}일</b></div>
     <div class="card mini-stat"><small>할 일 달성</small><b>${monthTasks.length ? Math.round(mDone / monthTasks.length * 100) : 0}%</b><em>${mDone}/${monthTasks.length}</em></div>
   </div>`;
+}
+
+/* 달력에서 꾹 눌러 끌어서 기간 고르기 */
+function bindCalendar() {
+  const wrap = $('#cal-weeks'); if (!wrap) return;
+  let st = null;
+  const cellAt = (x, y) => document.elementFromPoint(x, y)?.closest?.('.cal-cell');
+  const paint = () => {
+    const [a, b] = st.k0 <= st.k1 ? [st.k0, st.k1] : [st.k1, st.k0];
+    wrap.querySelectorAll('.cal-cell').forEach(c => c.classList.toggle('sel', c.dataset.date >= a && c.dataset.date <= b));
+  };
+  const clear = () => { if (st) clearTimeout(st.timer); st = null; S.calDragging = false; wrap.querySelectorAll('.cal-cell.sel').forEach(c => c.classList.remove('sel')); };
+  const activate = () => {
+    if (!st) return;
+    st.active = true; S.calDragging = true; paint();
+    try { wrap.setPointerCapture(st.id); } catch { }
+    try { navigator.vibrate?.(10); } catch { }
+  };
+  wrap.addEventListener('pointerdown', e => {
+    const c = e.target.closest('.cal-cell');
+    if (!c || e.target.closest('.cal-ev') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    st = { k0: c.dataset.date, k1: c.dataset.date, x: e.clientX, y: e.clientY, id: e.pointerId, mouse: e.pointerType === 'mouse', active: false };
+    if (!st.mouse) st.timer = setTimeout(activate, 350);
+  });
+  wrap.addEventListener('pointermove', e => {
+    if (!st || e.pointerId !== st.id) return;
+    if (!st.active) {
+      if (st.mouse) { const c = cellAt(e.clientX, e.clientY); if (c && c.dataset.date !== st.k0) activate(); else return; }
+      else { if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > 8) clear(); return; }
+    }
+    const c = cellAt(e.clientX, e.clientY);
+    if (c && c.dataset.date !== st.k1) { st.k1 = c.dataset.date; paint(); }
+  });
+  wrap.addEventListener('touchmove', e => { if (st && st.active) e.preventDefault(); }, { passive: false });
+  wrap.addEventListener('pointerup', e => {
+    if (!st || e.pointerId !== st.id) return;
+    if (!st.active) { clear(); return; }
+    const [a, b] = st.k0 <= st.k1 ? [st.k0, st.k1] : [st.k1, st.k0];
+    clear();
+    S.suppressDayClick = true; setTimeout(() => { S.suppressDayClick = false; }, 450);
+    openEventModal(null, { start: a, end: b });
+  });
+  wrap.addEventListener('pointercancel', clear);
+  wrap.addEventListener('contextmenu', e => e.preventDefault());
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1232,6 +1482,10 @@ function viewDay() {
       <button class="icon-btn" data-act="shift-day" data-n="1" aria-label="다음날">${icon('right')}</button>
     </div>
   </div>
+  ${eventsOn(key).length ? `<div class="day-events">${eventsOn(key).map(e => `
+    <button class="day-ev" data-act="edit-event" data-id="${e.id}" style="--c:${e.color || EV_COLORS[0]}">
+      <b>${esc(e.title)}</b><small>${evLen(e) > 1 ? `${daysBetween(e.start, key) + 1}일째 / 총 ${evLen(e)}일` : '하루 일정'}</small>
+    </button>`).join('')}</div>` : ''}
   <section class="card">
     <div class="today-head">
       <div>
@@ -1462,13 +1716,13 @@ function renderNotifier(force) {
   cur.forEach(t => {
     rows += `<div class="nf-row now">
       <span class="nf-lbl">지금</span>
-      <span class="nf-txt">${t.important ? '<span class="badge imp">중요</span>' : ''}<b>${esc(t.title)}</b><span class="muted">~${t.end} · ${fmtDur(left(t))} 남음</span></span>
+      <span class="nf-txt">${t.important ? '<span class="badge imp">중요</span>' : ''}<b>${esc(t.title)}</b><span class="muted">~${T(t.end)} · ${fmtDur(left(t))} 남음</span></span>
       <button class="nf-check" data-act="toggle-task" data-id="${t.id}">${icon('check')}다 했어요</button>
     </div>`;
   });
   if (next) rows += `<div class="nf-row">
       <span class="nf-lbl next">다음</span>
-      <span class="nf-txt">${next.important ? '<span class="badge imp">중요</span>' : ''}<b>${esc(next.title)}</b><span class="muted">${next.start} 시작 · ${until(next) >= 60 ? fmtDur(until(next)) : until(next) + '분'} 후</span></span>
+      <span class="nf-txt">${next.important ? '<span class="badge imp">중요</span>' : ''}<b>${esc(next.title)}</b><span class="muted">${T(next.start)} 시작 · ${until(next) >= 60 ? fmtDur(until(next)) : until(next) + '분'} 후</span></span>
       <button class="nf-check ghost" data-act="toggle-task" data-id="${next.id}">${icon('check')}미리 완료</button>
     </div>`;
   if (!cur.length && !next) {
@@ -1507,7 +1761,7 @@ function checkAlerts() {
   for (const t of tasksOn(todayKey())) {
     if (t.done) continue;
     const s = toMin(t.start), e = toMin(t.end);
-    if (nm === s - 5) fire(t.id + ':pre', `5분 뒤 시작 — ${t.title} (${t.start})`);
+    if (nm === s - 5) fire(t.id + ':pre', `5분 뒤 시작 — ${t.title} (${T(t.start)})`);
     if (nm === s) fire(t.id + ':start', `지금 시작할 시간이에요 — ${t.title}`);
     if (nm === e) fire(t.id + ':end', `${t.title} 끝날 시간! 다 했으면 체크하세요.`, {
       actLabel: '완료 체크', action: () => backend.update('tasks', t.id, { done: true, doneAt: Date.now() }),
@@ -1541,7 +1795,7 @@ function tick() {
     lastMinute = m;
     if (todayKey() !== lastDay) { lastDay = todayKey(); fired.clear(); }
     checkAlerts();
-    if (['home', 'day', 'calendar'].includes(S.view) && !$('#modal-root').children.length && !S.tlDragging) renderView();
+    if (['home', 'day', 'calendar'].includes(S.view) && !$('#modal-root').children.length && !S.tlDragging && !S.calDragging) renderView();
     renderNotifier(false);
   }
 }
@@ -1563,7 +1817,7 @@ function openModal(title, body, { wide = false } = {}) {
 }
 function closeModal() { $('#modal-root').innerHTML = ''; document.body.classList.remove('modal-open'); }
 
-const hourOpts = sel => [...Array(24)].map((_, h) => `<option value="${pad(h)}" ${pad(h) === sel ? 'selected' : ''}>${pad(h)}</option>`).join('');
+const hourOpts = sel => [...Array(DAY_MAX / 60 + 1)].map((_, h) => `<option value="${pad(h)}" ${pad(h) === sel ? 'selected' : ''}>${h >= 24 ? `다음날 ${pad(h - 24)}` : pad(h)}</option>`).join('');
 const minOpts = sel => [...Array(12)].map((_, i) => { const m = pad(i * 5); return `<option value="${m}" ${m === sel ? 'selected' : ''}>${m}</option>`; }).join('');
 const timeSel = (name, v) => { const [h, m] = v.split(':'); return `<span class="tsel"><select name="${name}_h" aria-label="시">${hourOpts(h)}</select><b>:</b><select name="${name}_m" aria-label="분">${minOpts(pad(Math.floor(Number(m) / 5) * 5))}</select></span>`; };
 
@@ -1588,14 +1842,14 @@ function openTaskModal(task, date, preset) {
     let start = 9 * 60;
     if (day.length) start = Math.max(...day.map(x => toMin(x.end)));
     else if (date === todayKey()) start = roundUp5(nowMin() + 1);
-    start = Math.min(start, 23 * 60);
-    t = { title: '', subject: '', date, start: fromMin(start), end: fromMin(Math.min(start + 60, 23 * 60 + 55)), important: false, memo: '' };
+    start = Math.min(start, DAY_MAX - 30);
+    t = { title: '', subject: '', date, start: fromMin(start), end: fromMin(Math.min(start + 60, DAY_MAX)), important: false, memo: '' };
   }
   openModal(task ? '할 일 수정' : '할 일 추가', `
   <form data-form="task" data-id="${task?.id || ''}" class="form">
     <label class="fld"><span>할 일</span><input name="title" required maxlength="80" value="${esc(t.title)}" placeholder="예: 수학 2단원 문제풀이" autofocus></label>
     <label class="fld"><span>날짜</span><input type="date" name="date" value="${t.date}" required></label>
-    <div class="fld"><span>시간 <small class="muted">5분 단위</small></span>
+    <div class="fld"><span>시간 <small class="muted">5분 단위 · 다음날 새벽 3시까지</small></span>
       <div class="time-row">${timeSel('start', t.start)}<span class="muted">~</span>${timeSel('end', t.end)}</div>
       <div class="quick">${[30, 50, 60, 90, 120].map(m => `<button type="button" class="qbtn" data-act="dur" data-min="${m}">${fmtDur(m)}</button>`).join('')}</div>
     </div>
@@ -1757,6 +2011,17 @@ function encode(img, maxSide, quality) {
    폼 저장
    ════════════════════════════════════════════════════════════ */
 const FORMS = {
+  event(f, fd) {
+    let a = fd.get('start'), b = fd.get('end');
+    if (!a || !b) return toast('날짜를 골라 주세요.');
+    if (a > b) [a, b] = [b, a];
+    const data = { title: fd.get('title').trim(), start: a, end: b, color: fd.get('color') || EV_COLORS[0], dday: fd.get('dday') === 'on', memo: fd.get('memo').trim(), updatedAt: Date.now() };
+    if (!data.title) return toast('일정 이름을 적어 주세요.');
+    const id = f.dataset.id;
+    if (id) backend.update('events', id, data); else backend.add('events', { ...data, createdAt: Date.now() });
+    closeModal();
+    toast(id ? '수정했어요.' : `${data.title} (${evLen(data)}일) 추가했어요.${data.dday ? ' 홈에서 D-day를 확인하세요.' : ''}`);
+  },
   async login(f, fd) {
     const id = String(fd.get('id') || '').trim();
     try { lsSet('studyapp_last_id', id); await backend.signIn(id); }
@@ -1765,6 +2030,7 @@ const FORMS = {
   task(f, fd) {
     const start = `${fd.get('start_h')}:${fd.get('start_m')}`, end = `${fd.get('end_h')}:${fd.get('end_m')}`;
     if (toMin(end) <= toMin(start)) return toast('끝나는 시간이 시작 시간보다 늦어야 해요.');
+    if (toMin(end) > DAY_MAX) return toast('하루 일정은 다음날 새벽 3시까지만 잡을 수 있어요.');
     const data = {
       title: fd.get('title').trim(), date: fd.get('date'), start, end,
       important: fd.get('important') === '1', subject: fd.get('subject') || '', memo: fd.get('memo').trim(),
@@ -1916,7 +2182,7 @@ function bindEvents() {
       case 'dur': {
         const f = el.closest('form');
         const s = toMin(`${f.start_h.value}:${f.start_m.value}`);
-        const e2 = Math.min(s + Number(el.dataset.min), 23 * 60 + 55);
+        const e2 = Math.min(s + Number(el.dataset.min), DAY_MAX);
         const [h, m] = fromMin(e2).split(':');
         f.end_h.value = h; f.end_m.value = m;
         break;
@@ -1926,7 +2192,10 @@ function bindEvents() {
 
       case 'cal-move': S.calMonth = new Date(S.calMonth.getFullYear(), S.calMonth.getMonth() + Number(el.dataset.n), 1); renderView(); break;
       case 'cal-today': S.calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); renderView(); break;
-      case 'open-day': location.hash = 'day/' + el.dataset.date; break;
+      case 'open-day': if (S.suppressDayClick) { S.suppressDayClick = false; break; } location.hash = 'day/' + el.dataset.date; break;
+      case 'new-event': openEventModal(null, { start: S.view === 'day' ? S.date : todayKey() }); break;
+      case 'edit-event': { const ev = find('events'); if (ev) openEventModal(ev); break; }
+      case 'del-event': if (confirm('이 기간 일정을 삭제할까요?')) { backend.remove('events', id); closeModal(); } break;
       case 'shift-day': location.hash = 'day/' + addDays(S.date, Number(el.dataset.n)); break;
       case 'copy-day': openCopyModal(el.dataset.date); break;
 
@@ -1976,6 +2245,7 @@ function bindEvents() {
   });
 
   document.addEventListener('change', e => {
+    if (e.target.closest?.('form[data-form=event]')) updateEvLen();
     if (e.target.name === 'files') {
       const box = e.target.closest('.drop').querySelector('.previews');
       box.innerHTML = '';
