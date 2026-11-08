@@ -4,7 +4,7 @@
 <!-- ═══════════ ⚙️ 설정 (여기만 바꾸면 돼요) ═══════════
      Supabase 주소와 키를 따옴표 안에 넣으세요. 비워 두면 '체험 모드'로 실행돼요. -->
 <script>
-  window.SUPABASE_URL = "https://wzxfreyzgmdavwtcwctp.supabase";
+  window.SUPABASE_URL = "https://wzxfreyzgmdavwtcwctp.supabse.co";
   window.SUPABASE_ANON_KEY = "sb_publishable_Not6RhrGK-vcJW49oAJdyw_N5IXcfab";
 </script>
 <!-- ═══════════════════════════════════════════════ -->
@@ -635,6 +635,13 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background
   .dday-num { font-size: 1.45rem; }
 }
 
+/* 저장 상태 */
+.save-pill { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 99px; font-size: .78rem; font-weight: 700; white-space: nowrap; margin-right: 4px; }
+.save-pill.saving { color: var(--muted); background: var(--soft); }
+.save-pill.offline { color: var(--warn); background: #fff2d9; }
+.save-pill.error { color: #fff; background: var(--imp); }
+@media (prefers-color-scheme: dark) { .save-pill.offline { background: #3a2f17; } }
+
 </style>
 </head>
 <body>
@@ -797,29 +804,120 @@ async function supabaseBackend() {
   const { cache, listeners, emit } = makeCache();
   const KEY_LS = 'studyapp_key';
   const BUCKET = 'study-photos';
-  let key = null, folder = null, authCb = null, pollT = null, pending = 0;
+  let key = null, folder = null, authCb = null, pollT = null, retryT = null, flushing = false, tries = 0;
+  // 아직 서버에 못 보낸 저장 — 기기에 보관했다가 자동으로 다시 보내요
+  let outbox = new Map();
+  const obKey = () => 'studyapp_outbox:' + key;
+  const saveOutbox = () => lsSet(obKey(), [...outbox.entries()]);
+  const loadOutbox = () => { outbox = new Map(lsGet(obKey(), []) || []); };
+
+  const status = { state: 'ok', count: 0, reason: '' };
+  const statusCbs = new Set();
+  const setStatus = (state, reason = '') => {
+    status.state = state; status.count = outbox.size; status.reason = reason;
+    statusCbs.forEach(cb => cb({ ...status }));
+  };
+  const warned = new Set();
+  const warnOnce = (k, msg) => { if (!warned.has(k)) { warned.add(k); toast(msg, { timeout: 9000 }); } };
+
+  // 오류 종류 나누기
+  const classify = error => {
+    const msg = String(error?.message || error || ''), code = String(error?.code || '');
+    if (code === 'PGRST202' || code === '42883' || /could not find the function|does not exist/i.test(msg)) return 'setup';
+    if (/invalid api key|jwt|apikey|no api key/i.test(msg) || code === 'PGRST301') return 'key';
+    if (!code || /fetch|load failed|network|timeout|aborted|cors/i.test(msg)) return 'net';
+    return 'other';
+  };
+  const REASON = {
+    setup: 'Supabase에 새 SQL이 실행되지 않았어요. 복사 페이지의 "SQL 복사하기" → Supabase SQL Editor에 붙여 넣고 Run 해 주세요.',
+    key: 'Supabase 키가 맞지 않아요. 복사 페이지에서 URL과 키를 다시 넣고 코드를 다시 붙여 넣어 주세요.',
+    net: '인터넷 연결이 잠깐 끊겼어요. 연결되면 자동으로 다시 저장해요.',
+    other: '서버가 저장을 거부했어요.',
+  };
   const fail = (what, error) => { console.error(what, error); toast(`${what} 실패: ${error?.message || error}`); };
   const sha = async s => {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('studyapp-photo:' + s));
     return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
   };
   const asUser = k => ({ uid: k, displayName: '내 공부방', photoURL: '', email: '' });
-  const track = p => { pending++; return p.then(({ error }) => { pending--; if (error) fail('저장', error); }, e => { pending--; fail('저장', e); }); };
 
-  async function pull(quiet) {
-    if (!key || pending) return;
-    const { data, error } = await sb.rpc('study_load', { p_key: key });
-    if (error) { if (!quiet) fail('불러오기', error); return; }
-    if (pending) return; // 그 사이 저장이 생겼으면 다음에
-    KINDS.forEach(k => cache[k].clear());
-    (data || []).forEach(r => KINDS.includes(r.kind) && cache[r.kind].set(r.id, { ...(r.data || {}), id: r.id }));
-    KINDS.forEach(emit);
+  const scheduleRetry = () => {
+    clearTimeout(retryT);
+    const wait = [2, 5, 10, 20, 30, 60][Math.min(tries, 5)] * 1000;
+    retryT = setTimeout(flush, wait);
+  };
+  async function flush() {
+    if (!key || flushing) return;
+    if (!outbox.size) { if (status.state !== 'ok') setStatus('ok'); return; }
+    flushing = true; clearTimeout(retryT);
+    setStatus('saving');
+    try {
+      for (const [k, op] of [...outbox.entries()]) {
+        const myKey = key;
+        let res;
+        try {
+          res = op.op === 'delete'
+            ? await sb.rpc('study_delete', { p_key: myKey, p_id: op.id })
+            : await sb.rpc('study_upsert', { p_key: myKey, p_id: op.id, p_kind: op.kind, p_data: op.data });
+        } catch (e) { res = { error: e }; }
+        if (myKey !== key) return;
+        if (res.error) {
+          const kind = classify(res.error);
+          console.error('저장 실패', kind, res.error);
+          tries++;
+          setStatus(kind === 'net' ? 'offline' : 'error', kind === 'other' ? `${REASON.other} (${res.error.message})` : REASON[kind]);
+          if (kind !== 'net') warnOnce(kind, '저장이 안 되고 있어요 — ' + status.reason);
+          scheduleRetry();
+          return;
+        }
+        if (outbox.get(k) === op) outbox.delete(k);   // 그 사이 다시 바뀌었으면 남겨 둠
+        saveOutbox();
+      }
+      tries = 0;
+      setStatus(outbox.size ? 'saving' : 'ok');
+      if (outbox.size) setTimeout(flush, 0);
+    } finally { flushing = false; }
   }
+  const queue = (op) => { outbox.delete(`${op.kind}:${op.id}`); outbox.set(`${op.kind}:${op.id}`, op); saveOutbox(); saveSnap(); setStatus('saving'); flush(); };
   const write = (k, id) => {
     const o = cache[k].get(id); if (!o) return;
     const { id: _drop, ...data } = o;
-    track(sb.rpc('study_upsert', { p_key: key, p_id: id, p_kind: k, p_data: data }));
+    queue({ op: 'upsert', kind: k, id, data });
   };
+
+  async function pull(quiet) {
+    if (!key) return;
+    let res;
+    try { res = await sb.rpc('study_load', { p_key: key }); } catch (e) { res = { error: e }; }
+    const { data, error } = res;
+    if (error) {
+      const kind = classify(error);
+      if (kind !== 'net') { setStatus('error', kind === 'other' ? `${REASON.other} (${error.message})` : REASON[kind]); warnOnce(kind, '불러오기가 안 돼요 — ' + status.reason); }
+      else if (!quiet) toast('인터넷 연결을 확인해 주세요. 이 기기에 있는 내용은 그대로 보여요.');
+      return;
+    }
+    KINDS.forEach(k => cache[k].clear());
+    (data || []).forEach(r => KINDS.includes(r.kind) && cache[r.kind].set(r.id, { ...(r.data || {}), id: r.id }));
+    applyOutbox();
+    KINDS.forEach(emit);
+    saveSnap();
+  }
+  // 아직 못 보낸 변경은 화면에 그대로 유지
+  function applyOutbox() {
+    for (const op of outbox.values()) {
+      if (!KINDS.includes(op.kind)) continue;
+      if (op.op === 'delete') cache[op.kind].delete(op.id);
+      else cache[op.kind].set(op.id, { ...op.data, id: op.id });
+    }
+  }
+  // 마지막 내용을 기기에도 보관 (인터넷 없을 때 보여 주려고)
+  let snapT = null;
+  function saveSnap() {
+    clearTimeout(snapT);
+    snapT = setTimeout(() => { if (key) lsSet('studyapp_cache:' + key, Object.fromEntries(KINDS.map(k => [k, [...cache[k].values()]]))); }, 400);
+  }
+
+  window.addEventListener('online', () => { tries = 0; flush(); pull(true); });
 
   return {
     demo: false, keyLogin: true,
@@ -830,25 +928,42 @@ async function supabaseBackend() {
       key = k; lsSet(KEY_LS, k); authCb(asUser(k));
     },
     async signOut() {
-      key = null; folder = null; lsSet(KEY_LS, null); clearInterval(pollT);
+      clearInterval(pollT); clearTimeout(retryT);
+      key = null; folder = null; outbox = new Map(); lsSet(KEY_LS, null);
       KINDS.forEach(k => cache[k].clear());
+      setStatus('ok');
       authCb(null);
     },
     async load() {
       folder = await sha(key);
       KINDS.forEach(k => cache[k].clear());
+      loadOutbox();
+      // 인터넷이 없어도 마지막으로 본 내용을 먼저 보여 줌
+      const snap = lsGet('studyapp_cache:' + key);
+      if (snap) KINDS.forEach(k => (snap[k] || []).forEach(o => cache[k].set(o.id, o)));
+      applyOutbox();
+      await flush();
       await pull(false);
       clearInterval(pollT);
-      pollT = setInterval(() => { if (!document.hidden) pull(true); }, 30000);
+      pollT = setInterval(() => { if (!document.hidden) { flush(); pull(true); } }, 30000);
     },
-    refresh() { return pull(true); },
+    refresh() { tries = 0; flush(); return pull(true); },
+    retry() { tries = 0; warned.clear(); return flush().then(() => pull(true)); },
+    onStatus(cb) { statusCbs.add(cb); cb({ ...status }); return () => statusCbs.delete(cb); },
     subscribe(k, cb) { listeners[k].add(cb); cb([...cache[k].values()]); return () => listeners[k].delete(cb); },
     add(k, data) { const id = uid(); cache[k].set(id, { ...data, id }); emit(k); write(k, id); return id; },
     update(k, id, patch) { const o = cache[k].get(id); if (!o) return; cache[k].set(id, { ...o, ...patch }); emit(k); write(k, id); },
-    remove(k, id) { cache[k].delete(id); emit(k); track(sb.rpc('study_delete', { p_key: key, p_id: id })); },
+    remove(k, id) { cache[k].delete(id); emit(k); queue({ op: 'delete', kind: k, id }); },
     async uploadImage(path, blob) {
-      const { error } = await sb.storage.from(BUCKET).upload(`${folder}/${path}`, blob, { contentType: 'image/jpeg', upsert: false });
-      if (error) { fail('사진 업로드', error); return false; }
+      let res;
+      try { res = await sb.storage.from(BUCKET).upload(`${folder}/${path}`, blob, { contentType: 'image/jpeg', upsert: false }); } catch (e) { res = { error: e }; }
+      if (res.error) {
+        const msg = String(res.error.message || res.error);
+        if (/bucket not found/i.test(msg)) toast('사진 저장소가 없어요. 복사 페이지의 SQL을 Supabase에서 다시 실행해 주세요.', { timeout: 9000 });
+        else if (classify(res.error) === 'net') toast('인터넷이 끊겨서 사진을 못 올렸어요. 연결된 뒤 다시 올려 주세요.');
+        else fail('사진 업로드', res.error);
+        return false;
+      }
       return true;
     },
     async imageUrls(paths) {
@@ -959,6 +1074,7 @@ function renderShell() {
           <h1 id="tb-title"></h1>
         </div>
         <div class="tb-actions">
+          <span id="save-status"></span>
           <button class="icon-btn" id="notify-btn" data-act="toggle-notify"></button>
           <button class="icon-btn" data-act="logout" title="로그아웃">${icon('logout')}</button>
           <span class="tb-avatar">${avatar}</span>
@@ -2165,6 +2281,16 @@ function bindEvents() {
         renderView(); break;
       }
       case 'close-modal': closeModal(); break;
+      case 'save-info': {
+        const st = S.saveStatus || {};
+        openModal('저장 상태', `<div class="form">
+          <p>${st.state === 'offline' ? '인터넷 연결이 잠깐 끊겼어요.' : '서버에 저장이 안 되고 있어요.'} 아직 못 보낸 변경 <b>${st.count}개</b>는 이 기기에 안전하게 보관돼 있고, 자동으로 다시 보내요.</p>
+          <p class="muted small">${esc(st.reason || '')}</p>
+          <div class="modal-foot"><span></span><div class="row-btns"><button type="button" class="btn ghost" data-act="close-modal">닫기</button><button type="button" class="btn primary" data-act="retry-save">지금 다시 시도</button></div></div>
+        </div>`);
+        break;
+      }
+      case 'retry-save': closeModal(); toast('다시 저장하는 중…'); backend.retry?.(); break;
       case 'toast-close': el.closest('.toast')?.remove(); break;
       case 'toast-act': { const f = toastActs.get(id); if (f) f(); el.closest('.toast')?.remove(); break; }
 
@@ -2286,11 +2412,19 @@ function route() {
 /* ════════════════════════════════════════════════════════════
    시작
    ════════════════════════════════════════════════════════════ */
+function renderSaveStatus(st) {
+  const el = $('#save-status'); if (!el) return;
+  if (!st || st.state === 'ok') { el.innerHTML = ''; return; }
+  if (st.state === 'saving') { el.innerHTML = `<span class="save-pill saving">저장 중…</span>`; return; }
+  const label = st.state === 'offline' ? `연결 끊김 · ${st.count}개 대기` : `저장 안 됨 · ${st.count}개`;
+  el.innerHTML = `<button class="save-pill ${st.state}" data-act="save-info">${label}</button>`;
+}
 async function startApp(user) {
   S.user = user; S.loaded = false;
   unsubs.forEach(f => f()); unsubs = [];
   renderShell();
   route();
+  if (backend.onStatus) unsubs.push(backend.onStatus(st => { S.saveStatus = st; renderSaveStatus(st); }));
   await backend.load();
   for (const k of KINDS) unsubs.push(backend.subscribe(k, arr => { S[k] = arr; renderAll(); }));
   S.loaded = true;
