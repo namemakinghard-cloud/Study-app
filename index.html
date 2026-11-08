@@ -4,7 +4,7 @@
 <!-- ═══════════ ⚙️ 설정 (여기만 바꾸면 돼요) ═══════════
      Supabase 주소와 키를 따옴표 안에 넣으세요. 비워 두면 '체험 모드'로 실행돼요. -->
 <script>
-  window.SUPABASE_URL = "https://wzxfreyzgmdavwtcwctp.supabse.co";
+  window.SUPABASE_URL = "https://wzxfreyzgmdavwtcwctp.supabase.co";
   window.SUPABASE_ANON_KEY = "sb_publishable_Not6RhrGK-vcJW49oAJdyw_N5IXcfab";
 </script>
 <!-- ═══════════════════════════════════════════════ -->
@@ -642,6 +642,10 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background
 .save-pill.error { color: #fff; background: var(--imp); }
 @media (prefers-color-scheme: dark) { .save-pill.offline { background: #3a2f17; } }
 
+.diag { background: var(--soft); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.diag pre { margin: 0; white-space: pre-wrap; font: inherit; font-weight: 600; }
+.diag small { color: var(--muted); font-size: .76rem; overflow-wrap: anywhere; }
+
 </style>
 </head>
 <body>
@@ -649,7 +653,17 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .86em; background
 <div id="modal-root"></div>
 <div id="toast-root" aria-live="polite"></div>
 <script type="module">
-const SUPABASE_URL = String(window.SUPABASE_URL || '').trim();
+// 주소를 조금 잘못 넣어도 알아서 고쳐요 (대시보드 주소, https 빠짐, 끝에 / 등)
+function normSupabaseUrl(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  let m = s.match(/project\/([a-z0-9]{15,30})/i);
+  if (m) return `https://${m[1].toLowerCase()}.supabase.co`;
+  m = s.match(/([a-z0-9]{15,30})\.supabase\.(co|in)/i);
+  if (m) return `https://${m[1].toLowerCase()}.supabase.${m[2]}`;
+  return /^https?:\/\//.test(s) ? s.replace(/\/+$/, '') : 'https://' + s.replace(/\/+$/, '');
+}
+const SUPABASE_URL = normSupabaseUrl(window.SUPABASE_URL);
 const SUPABASE_ANON_KEY = String(window.SUPABASE_ANON_KEY || '').trim();
 
 /* ════════════════════════════════════════════════════════════
@@ -755,7 +769,7 @@ let unsubs = [];
 /* ════════════════════════════════════════════════════════════
    저장소 (Supabase / 체험 모드)
    ════════════════════════════════════════════════════════════ */
-const isConfigured = () => !!(SUPABASE_URL && SUPABASE_ANON_KEY && /^https?:\/\//.test(SUPABASE_URL));
+const isConfigured = () => !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 function makeCache() {
   const cache = Object.fromEntries(KINDS.map(k => [k, new Map()]));
@@ -811,7 +825,7 @@ async function supabaseBackend() {
   const saveOutbox = () => lsSet(obKey(), [...outbox.entries()]);
   const loadOutbox = () => { outbox = new Map(lsGet(obKey(), []) || []); };
 
-  const status = { state: 'ok', count: 0, reason: '' };
+  const status = { state: 'ok', count: 0, reason: '', raw: '', url: SUPABASE_URL };
   const statusCbs = new Set();
   const setStatus = (state, reason = '') => {
     status.state = state; status.count = outbox.size; status.reason = reason;
@@ -831,7 +845,7 @@ async function supabaseBackend() {
   const REASON = {
     setup: 'Supabase에 새 SQL이 실행되지 않았어요. 복사 페이지의 "SQL 복사하기" → Supabase SQL Editor에 붙여 넣고 Run 해 주세요.',
     key: 'Supabase 키가 맞지 않아요. 복사 페이지에서 URL과 키를 다시 넣고 코드를 다시 붙여 넣어 주세요.',
-    net: '인터넷 연결이 잠깐 끊겼어요. 연결되면 자동으로 다시 저장해요.',
+    net: 'Supabase 서버에 닿지 않아요. 인터넷이 끊겼거나, 코드에 넣은 Supabase 주소(Project URL)가 틀렸거나, Supabase 프로젝트가 일시정지된 경우예요.',
     other: '서버가 저장을 거부했어요.',
   };
   const fail = (what, error) => { console.error(what, error); toast(`${what} 실패: ${error?.message || error}`); };
@@ -864,6 +878,7 @@ async function supabaseBackend() {
         if (res.error) {
           const kind = classify(res.error);
           console.error('저장 실패', kind, res.error);
+          status.raw = String(res.error?.message || res.error);
           tries++;
           setStatus(kind === 'net' ? 'offline' : 'error', kind === 'other' ? `${REASON.other} (${res.error.message})` : REASON[kind]);
           if (kind !== 'net') warnOnce(kind, '저장이 안 되고 있어요 — ' + status.reason);
@@ -892,6 +907,8 @@ async function supabaseBackend() {
     const { data, error } = res;
     if (error) {
       const kind = classify(error);
+      status.raw = String(error?.message || error);
+      if (kind === 'net') setStatus('offline', REASON.net);
       if (kind !== 'net') { setStatus('error', kind === 'other' ? `${REASON.other} (${error.message})` : REASON[kind]); warnOnce(kind, '불러오기가 안 돼요 — ' + status.reason); }
       else if (!quiet) toast('인터넷 연결을 확인해 주세요. 이 기기에 있는 내용은 그대로 보여요.');
       return;
@@ -949,6 +966,24 @@ async function supabaseBackend() {
     },
     refresh() { tries = 0; flush(); return pull(true); },
     retry() { tries = 0; warned.clear(); return flush().then(() => pull(true)); },
+    async diagnose() {
+      if (!navigator.onLine) return '이 기기가 인터넷에 연결돼 있지 않아요.';
+      if (!/^https:\/\/[a-z0-9]{15,30}\.supabase\.(co|in)$/.test(SUPABASE_URL))
+        return `Supabase 주소 모양이 이상해요: ${SUPABASE_URL}\n올바른 모양은 https://영문숫자20자쯤.supabase.co 예요.`;
+      try {
+        const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/study_load', {
+          method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_key: key || 'test-connection' }),
+        });
+        if (r.ok) return '✅ 연결 정상이에요. "지금 다시 시도"를 눌러 주세요.';
+        const t = await r.text();
+        if (r.status === 401 || /api key|jwt/i.test(t)) return '서버에는 닿았는데 키가 틀렸어요. 복사 페이지에 anon(또는 publishable) 키를 다시 넣어 주세요.';
+        if (r.status === 404 || /could not find/i.test(t)) return '서버에는 닿았는데 SQL 설정이 없어요. Supabase SQL Editor에서 SQL을 다시 실행해 주세요.';
+        return `서버 응답 ${r.status}: ${t.slice(0, 160)}`;
+      } catch (e) {
+        return `Supabase 서버(${SUPABASE_URL})에 연결할 수 없어요.\n① 주소가 맞는지 (Supabase → Project Settings → Data API의 Project URL과 똑같은지)\n② Supabase 대시보드에서 프로젝트가 "Paused(일시정지)" 상태가 아닌지 확인해 주세요.`;
+      }
+    },
     onStatus(cb) { statusCbs.add(cb); cb({ ...status }); return () => statusCbs.delete(cb); },
     subscribe(k, cb) { listeners[k].add(cb); cb([...cache[k].values()]); return () => listeners[k].delete(cb); },
     add(k, data) { const id = uid(); cache[k].set(id, { ...data, id }); emit(k); write(k, id); return id; },
@@ -2286,8 +2321,11 @@ function bindEvents() {
         openModal('저장 상태', `<div class="form">
           <p>${st.state === 'offline' ? '인터넷 연결이 잠깐 끊겼어요.' : '서버에 저장이 안 되고 있어요.'} 아직 못 보낸 변경 <b>${st.count}개</b>는 이 기기에 안전하게 보관돼 있고, 자동으로 다시 보내요.</p>
           <p class="muted small">${esc(st.reason || '')}</p>
+          <div class="diag"><b>연결 확인</b><pre id="diag-out">확인하는 중…</pre>
+            <small>연결 주소: ${esc(st.url || '')}<br>오류 원문: ${esc(st.raw || '-')}</small></div>
           <div class="modal-foot"><span></span><div class="row-btns"><button type="button" class="btn ghost" data-act="close-modal">닫기</button><button type="button" class="btn primary" data-act="retry-save">지금 다시 시도</button></div></div>
         </div>`);
+        backend.diagnose?.().then(t => { const o = $('#diag-out'); if (o) o.textContent = t; });
         break;
       }
       case 'retry-save': closeModal(); toast('다시 저장하는 중…'); backend.retry?.(); break;
